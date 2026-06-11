@@ -126,23 +126,35 @@
 
   /* ---------- Counting ---------- */
   #count-arena{ position:relative; width:min(96vw,100vmin); flex:1; max-height:52vh; }
-  .countable{ position:absolute; width:16vmin; height:16vmin; cursor:pointer;
+  .countable{ position:absolute; width:13vmin; height:13vmin; cursor:pointer;
     transform:translate(-50%,-50%); }
   .countable.counted{ filter:drop-shadow(0 0 2vmin gold); }
   .countable .tick{
     position:absolute; top:-1vmin; right:-1vmin; font-size:6vmin; display:none;
   }
   .countable.counted .tick{ display:block; }
-  .num-row{ display:flex; gap:3vmin; justify-content:center; padding-bottom:1vmin; }
+  .num-row{ display:flex; flex-wrap:wrap; gap:2vmin; justify-content:center;
+    padding-bottom:1vmin; max-width:96vw; }
   .num-btn{
-    width:15vmin; height:15vmin; border-radius:50%; border:none; cursor:pointer;
+    width:12.5vmin; height:12.5vmin; border-radius:50%; border:none; cursor:pointer;
     background:linear-gradient(180deg,#c0a4ec,var(--purple)); color:#fff;
-    font-family:inherit; font-size:7.5vmin; font-weight:bold;
+    font-family:inherit; font-size:5.5vmin; font-weight:bold;
     box-shadow:0 1vmin 0 #7b4fb0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; line-height:1;
   }
   .num-btn:active{ transform:translateY(.8vmin); box-shadow:0 .2vmin 0 #7b4fb0; }
-  .num-btn .dots{ font-size:2.2vmin; letter-spacing:.3vmin; margin-top:.6vmin; }
+  .num-btn .dots{ font-size:1.6vmin; letter-spacing:.25vmin; margin-top:.5vmin; line-height:1.3; }
+
+  /* ---------- Letters ---------- */
+  .abc-progress{ display:flex; flex-wrap:wrap; gap:.7vmin; justify-content:center;
+    max-width:94vw; margin-bottom:3vmin; }
+  .abc-cell{ width:4.6vmin; height:4.6vmin; border-radius:1.1vmin; background:#fff;
+    color:#dbb9cf; font-size:2.8vmin; font-weight:bold;
+    display:flex; align-items:center; justify-content:center; }
+  .abc-cell.done{ background:var(--pink); color:#fff; }
+  .letter-choice{ width:22vmin; height:22vmin; display:flex; align-items:center;
+    justify-content:center; font-size:13vmin; font-weight:bold; font-family:inherit; }
+  #shapes-row .choice svg.shape{ width:18vmin; height:18vmin; }
 
   /* fun feedback animations */
   .happy{ animation:happy .6s ease; }
@@ -206,9 +218,9 @@
       <span class="icon">✨🖐️</span><span class="ping" data-ping="0"></span>
       <span class="label">Catch!</span>
     </button>
-    <button class="hub-card" data-game="colors">
-      <span class="icon">🌈</span><span class="ping" data-ping="2"></span>
-      <span class="label">Colours</span>
+    <button class="hub-card" data-game="alpha">
+      <span class="icon">🔤</span><span class="ping" data-ping="2"></span>
+      <span class="label">Letters</span>
     </button>
     <button class="hub-card" data-game="count">
       <span class="icon">1️⃣2️⃣3️⃣</span><span class="ping" data-ping="1"></span>
@@ -232,16 +244,14 @@
   <div id="catch-arena"></div>
 </div>
 
-<!-- ============ COLORS ============ -->
-<div class="screen" id="s-colors">
+<!-- ============ LETTERS ============ -->
+<div class="screen" id="s-alpha">
   <div class="topbar">
     <button class="round-btn btn-home">🏠</button>
     <button class="round-btn btn-say">🔊</button>
   </div>
-  <div class="stars" id="colors-stars"></div>
-  <div style="font-size:10vmin" id="colors-blob">🎨</div>
-  <div style="height:3vmin"></div>
-  <div class="choice-row" id="colors-row"></div>
+  <div class="abc-progress" id="abc-progress"></div>
+  <div class="choice-row" id="alpha-row"></div>
 </div>
 
 <!-- ============ COUNTING ============ -->
@@ -295,7 +305,10 @@ const PINGS = [
   { name:'Steadyping',  color:'green',  body:'#9fdd8e', dark:'#6cbf58', emblem:'clover', emColor:'#3c9e2f' },
   { name:'Flyping',     color:'blue',   body:'#90c8f8', dark:'#5a9be0', emblem:'cloud',  emColor:'#3d7fd6' },
 ];
-const SHAPE_NAMES = { heart:'heart', star:'star', note:'music note', flower:'flower', clover:'lucky clover', cloud:'cloud' };
+const SHAPE_NAMES = { heart:'heart', star:'star', note:'music note', flower:'flower', clover:'lucky clover', cloud:'cloud',
+                      circle:'circle', square:'square', triangle:'triangle', diamond:'diamond', moon:'moon' };
+// shapes with no owner Teenieping (used by the shapes game for variety)
+const EXTRA_SHAPES = ['circle','square','triangle','diamond','moon'];
 
 function shapeInner(name, color){
   switch(name){
@@ -318,6 +331,16 @@ function shapeInner(name, color){
     case 'cloud':
       return `<ellipse cx="50" cy="62" rx="34" ry="20" fill="${color}"/>
               <circle cx="36" cy="48" r="16" fill="${color}"/><circle cx="58" cy="42" r="20" fill="${color}"/>`;
+    case 'circle':
+      return `<circle cx="50" cy="50" r="40" fill="${color}"/>`;
+    case 'square':
+      return `<rect x="12" y="12" width="76" height="76" rx="10" fill="${color}"/>`;
+    case 'triangle':
+      return `<polygon points="50,10 92,86 8,86" fill="${color}"/>`;
+    case 'diamond':
+      return `<polygon points="50,6 90,50 50,94 10,50" fill="${color}"/>`;
+    case 'moon':
+      return `<path d="M63 8 A44 44 0 1 0 63 92 A35 35 0 1 1 63 8 Z" fill="${color}"/>`;
   }
   return '';
 }
@@ -358,13 +381,27 @@ const VOICE_LINES = (() => {
     'praise-1':    "Hooray! You did it, Celine! You are amazing!",
     'praise-2':    "Woohoo! Great job, Celine! The Teeniepings are so happy!",
     'praise-3':    "Yay Celine! You are a Teenieping superstar!",
+    'alpha-intro': "Let's find all the letters, from A to Z!",
+    'oops-letter': "Oopsie! Try again!",
   };
   const words = ['one','two','three','four','five','six','seven','eight','nine','ten'];
   words.forEach((w, i) => v['num-' + (i+1)] = w[0].toUpperCase() + w.slice(1) + '!');
-  for(let n = 1; n <= 5; n++){
+  for(let n = 1; n <= 10; n++){
     v['count-yes-' + n] = 'Yes! ' + words[n-1][0].toUpperCase() + words[n-1].slice(1) +
       (n === 1 ? ' Teenieping!' : ' Teeniepings!') + ' Well done, Celine!';
   }
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(ch => {
+    v['alpha-q-' + ch.toLowerCase()] = `Can you find the letter ${ch}? Tap the letter ${ch}!`;
+    v['letter-' + ch.toLowerCase()]  = `The letter ${ch}!`;
+  });
+  ['Yay!','Well done!','Great job!','Amazing!'].forEach((c, i) => v['cheer-' + (i+1)] = c);
+  EXTRA_SHAPES.forEach(s => {
+    const sw = SHAPE_NAMES[s];
+    v['shape-q-' + s]    = `The Teeniepings are looking for the ${sw}! Can you find it, Celine? Tap the ${sw}!`;
+    v['shape-yes-' + s]  = `Yay! You found the ${sw}! The Teeniepings are so happy!`;
+    v['shape-no-' + s]   = `Oopsie, that's the ${sw}!`;
+    v['shape-find-' + s] = `Find the ${sw}!`;
+  });
   PINGS.forEach(p => {
     const sw = SHAPE_NAMES[p.emblem];
     v['color-q-' + p.color]     = `Where is the ${p.color} Teenieping? Tap the ${p.color} one!`;
@@ -556,47 +593,59 @@ function startCatch(){
 }
 
 /* =====================================================
-   GAME 2 — COLOURS (tap the Teenieping of the spoken colour)
+   GAME 2 — LETTERS (find all 26 letters, A to Z; a surprise
+   Teenieping hides behind every correct letter)
    ===================================================== */
 const ROUNDS = 5;
-let colRound = 0, colTarget = null, colBusy = false;
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+let alphaIdx = 0, alphaBusy = false;
 
 function shuffled(arr){ return [...arr].sort(()=>Math.random()-0.5); }
 
-function nextColorRound(){
-  colBusy = false;
-  starRow($('colors-stars'), ROUNDS, colRound);
-  const options = shuffled(PINGS).slice(0,3);
-  colTarget = options[Math.floor(Math.random()*3)];
-  const row = $('colors-row'); row.innerHTML = '';
-  options.forEach(p => {
+function abcRow(){
+  const el = $('abc-progress'); el.innerHTML = '';
+  LETTERS.forEach((L, i) => {
+    el.innerHTML += `<div class="abc-cell${i < alphaIdx ? ' done' : ''}">${L}</div>`;
+  });
+}
+function nextAlphaRound(withIntro){
+  alphaBusy = false;
+  abcRow();
+  const target = LETTERS[alphaIdx];
+  const options = shuffled([target, ...shuffled(LETTERS.filter(l => l !== target)).slice(0,2)]);
+  const row = $('alpha-row'); row.innerHTML = '';
+  options.forEach(L => {
     const b = document.createElement('button');
-    b.className = 'choice';
-    b.innerHTML = `<span class="ping" style="display:block;width:24vmin;height:24vmin">${pingSVG(p)}</span>`;
+    b.className = 'choice letter-choice';
+    b.textContent = L;
+    b.style.color = PINGS[Math.floor(Math.random()*PINGS.length)].dark;
     b.addEventListener('pointerdown', () => {
-      if(colBusy) return;
-      if(p === colTarget){
-        colBusy = true;
+      if(alphaBusy) return;
+      if(L === target){
+        alphaBusy = true;
+        // the letter turns into a surprise Teenieping!
+        b.innerHTML = pingSVG(PINGS[Math.floor(Math.random()*PINGS.length)]);
         b.classList.add('happy'); sndYay();
-        speak('color-yes-' + p.color);
-        colRound++;
-        starRow($('colors-stars'), ROUNDS, colRound);
-        setTimeout(() => colRound >= ROUNDS ? win() : nextColorRound(), 1900);
+        speak(['letter-' + target.toLowerCase(), 'cheer-' + (1 + Math.floor(Math.random()*4))]);
+        alphaIdx++;
+        abcRow();
+        setTimeout(() => alphaIdx >= LETTERS.length ? win() : nextAlphaRound(false), 1700);
       }else{
         b.classList.add('wobble'); sndOops();
-        setTimeout(()=>b.classList.remove('wobble'), 600);
-        speak(['color-no-' + p.color, 'color-q-' + colTarget.color]);
+        setTimeout(() => b.classList.remove('wobble'), 600);
+        speak(['oops-letter', 'alpha-q-' + target.toLowerCase()]);
       }
     });
     row.appendChild(b);
   });
-  speak('color-q-' + colTarget.color, true);
+  const q = 'alpha-q-' + target.toLowerCase();
+  speak(withIntro ? ['alpha-intro', q] : [q], true);
 }
-function startColors(){
-  currentGame = 'colors';
-  colRound = 0;
-  showScreen('s-colors');
-  nextColorRound();
+function startAlpha(){
+  currentGame = 'alpha';
+  alphaIdx = 0;
+  showScreen('s-alpha');
+  nextAlphaRound(true);
 }
 
 /* =====================================================
@@ -604,12 +653,13 @@ function startColors(){
    ===================================================== */
 let cntRound = 0, cntTarget = 0, cntTapped = 0, cntBusy = false;
 // preset scatter spots (percent of arena) so Teeniepings never overlap
-const SLOTS = [[18,22],[50,15],[82,22],[25,55],[58,50],[85,60],[15,85],[48,82],[80,88]];
+const SLOTS = [[12,16],[37,12],[62,16],[87,14],[12,46],[37,42],[63,46],[88,44],
+               [13,78],[38,84],[63,78],[88,82]];
 
 function nextCountRound(){
   cntBusy = false;
   starRow($('count-stars'), ROUNDS, cntRound);
-  cntTarget = 1 + Math.floor(Math.random()*5);
+  cntTarget = 1 + Math.floor(Math.random()*10);
   cntTapped = 0;
   const p = PINGS[Math.floor(Math.random()*PINGS.length)];
   const arena = $('count-arena'); arena.innerHTML = '';
@@ -632,10 +682,11 @@ function nextCountRound(){
     arena.appendChild(d);
   });
   const row = $('num-row'); row.innerHTML = '';
-  for(let n=1;n<=5;n++){
+  for(let n=1;n<=10;n++){
     const b = document.createElement('button');
     b.className = 'num-btn';
-    b.innerHTML = n + `<span class="dots">${'●'.repeat(n)}</span>`;
+    const dots = '●'.repeat(Math.min(n,5)) + (n > 5 ? '<br>' + '●'.repeat(n-5) : '');
+    b.innerHTML = n + `<span class="dots">${dots}</span>`;
     b.addEventListener('pointerdown', () => {
       if(cntBusy) return;
       if(n === cntTarget){
@@ -667,15 +718,18 @@ function startCount(){
 /* =====================================================
    GAME 4 — SHAPES (find the spoken shape)
    ===================================================== */
-let shpRound = 0, shpTarget = null, shpBusy = false;
+let shpRound = 0, shpTarget = null, shpBusy = false, lastShape = null;
+const ALL_SHAPES = [...PINGS.map(p => p.emblem), ...EXTRA_SHAPES];
 
 function nextShapeRound(){
   shpBusy = false;
   starRow($('shapes-stars'), ROUNDS, shpRound);
-  const owner = PINGS[Math.floor(Math.random()*PINGS.length)];
-  shpTarget = owner.emblem;
+  do{ shpTarget = ALL_SHAPES[Math.floor(Math.random()*ALL_SHAPES.length)]; }while(shpTarget === lastShape);
+  lastShape = shpTarget;
+  // emblem shapes belong to a Teenieping; the extra shapes get a random helper
+  const owner = PINGS.find(p => p.emblem === shpTarget) || PINGS[Math.floor(Math.random()*PINGS.length)];
   $('shapes-ping').innerHTML = pingSVG(owner);
-  const others = shuffled(PINGS.filter(p => p !== owner)).slice(0,2).map(p => p.emblem);
+  const others = shuffled(ALL_SHAPES.filter(s => s !== shpTarget)).slice(0,3);
   const options = shuffled([shpTarget, ...others]);
   const row = $('shapes-row'); row.innerHTML = '';
   options.forEach(sh => {
@@ -711,7 +765,7 @@ function startShapes(){
 /* =====================================================
    WIRING
    ===================================================== */
-const GAME_STARTERS = { catch:startCatch, colors:startColors, count:startCount, shapes:startShapes };
+const GAME_STARTERS = { catch:startCatch, alpha:startAlpha, count:startCount, shapes:startShapes };
 
 // title parade + hub card characters
 $('title-parade').innerHTML = PINGS.map(p => `<span class="ping">${pingSVG(p)}</span>`).join('');
