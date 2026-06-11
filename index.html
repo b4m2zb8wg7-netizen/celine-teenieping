@@ -152,8 +152,8 @@
     color:#dbb9cf; font-size:2.8vmin; font-weight:bold;
     display:flex; align-items:center; justify-content:center; }
   .abc-cell.done{ background:var(--pink); color:#fff; }
-  .letter-choice{ width:22vmin; height:22vmin; display:flex; align-items:center;
-    justify-content:center; font-size:13vmin; font-weight:bold; font-family:inherit; }
+  .letter-choice{ width:19vmin; height:19vmin; display:flex; align-items:center;
+    justify-content:center; font-size:11vmin; font-weight:bold; font-family:inherit; }
   #shapes-row .choice svg.shape{ width:18vmin; height:18vmin; }
 
   /* fun feedback animations */
@@ -497,6 +497,10 @@ const sndOops = () => { tone(330,.18,'sine',0,.12); tone(262,.22,'sine',.18,.12)
    ===================================================== */
 let currentGame = null;
 let catchTimers = [];
+// one shared timer for "what happens after this round" — cancelled by the
+// home button so a finished game can't keep talking over the hub
+let roundTimer = null;
+function later(fn, ms){ clearTimeout(roundTimer); roundTimer = setTimeout(fn, ms); }
 
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
@@ -506,8 +510,10 @@ function showScreen(id){
 function stopCatchTimers(){ catchTimers.forEach(clearInterval); catchTimers = []; }
 function goHome(){
   stopCatchTimers();
+  clearTimeout(roundTimer);   // no queued next-round voice after leaving a game
+  currentGame = null;
   showScreen('s-hub');
-  speak('hub', true);
+  speak('hub', true);         // speak() also cuts off whatever was playing
 }
 function starRow(el, total, filled){
   el.innerHTML = '';
@@ -555,6 +561,7 @@ function randPos(el){
   el.style.top  = (2 + Math.random()*70) + '%';
 }
 function spawnFloater(){
+  if(currentGame !== 'catch') return;   // player already went home
   const arena = $('catch-arena');
   const p = PINGS[Math.floor(Math.random()*PINGS.length)];
   const f = document.createElement('div');
@@ -577,8 +584,8 @@ function spawnFloater(){
     setTimeout(()=>s.remove(), 700);
     f.remove();
     heartsRow();
-    if(caught >= CATCH_GOAL){ setTimeout(win, 700); }
-    else { setTimeout(spawnFloater, 500); }
+    if(caught >= CATCH_GOAL){ later(win, 700); }
+    else { later(spawnFloater, 500); }
   }, { once:true });
 }
 function startCatch(){
@@ -598,21 +605,29 @@ function startCatch(){
    ===================================================== */
 const ROUNDS = 5;
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-let alphaIdx = 0, alphaBusy = false;
+const ABC_KEY = 'celineAbc';
+// letters found so far — saved so Celine can continue another day
+let abcFound = new Set(JSON.parse(localStorage.getItem(ABC_KEY) || '[]'));
+let alphaBusy = false;
 
 function shuffled(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+function saveAbc(){ localStorage.setItem(ABC_KEY, JSON.stringify([...abcFound])); }
 
 function abcRow(){
   const el = $('abc-progress'); el.innerHTML = '';
-  LETTERS.forEach((L, i) => {
-    el.innerHTML += `<div class="abc-cell${i < alphaIdx ? ' done' : ''}">${L}</div>`;
+  // cells stay blank until that letter has been found, so the tracker
+  // can't be used as a cheat sheet
+  LETTERS.forEach(L => {
+    const done = abcFound.has(L);
+    el.innerHTML += `<div class="abc-cell${done ? ' done' : ''}">${done ? L : ''}</div>`;
   });
 }
 function nextAlphaRound(withIntro){
   alphaBusy = false;
   abcRow();
-  const target = LETTERS[alphaIdx];
-  const options = shuffled([target, ...shuffled(LETTERS.filter(l => l !== target)).slice(0,2)]);
+  const remaining = LETTERS.filter(L => !abcFound.has(L));
+  const target = remaining[Math.floor(Math.random()*remaining.length)];
+  const options = shuffled([target, ...shuffled(LETTERS.filter(l => l !== target)).slice(0,3)]);
   const row = $('alpha-row'); row.innerHTML = '';
   options.forEach(L => {
     const b = document.createElement('button');
@@ -627,9 +642,16 @@ function nextAlphaRound(withIntro){
         b.innerHTML = pingSVG(PINGS[Math.floor(Math.random()*PINGS.length)]);
         b.classList.add('happy'); sndYay();
         speak(['letter-' + target.toLowerCase(), 'cheer-' + (1 + Math.floor(Math.random()*4))]);
-        alphaIdx++;
+        abcFound.add(target); saveAbc();
         abcRow();
-        setTimeout(() => alphaIdx >= LETTERS.length ? win() : nextAlphaRound(false), 1700);
+        later(() => {
+          if(abcFound.size >= LETTERS.length){
+            abcFound.clear(); saveAbc();   // alphabet complete — fresh start next time
+            win();
+          }else{
+            nextAlphaRound(false);
+          }
+        }, 1700);
       }else{
         b.classList.add('wobble'); sndOops();
         setTimeout(() => b.classList.remove('wobble'), 600);
@@ -643,7 +665,6 @@ function nextAlphaRound(withIntro){
 }
 function startAlpha(){
   currentGame = 'alpha';
-  alphaIdx = 0;
   showScreen('s-alpha');
   nextAlphaRound(true);
 }
@@ -695,7 +716,7 @@ function nextCountRound(){
         speak('count-yes-' + n);
         cntRound++;
         starRow($('count-stars'), ROUNDS, cntRound);
-        setTimeout(() => cntRound >= ROUNDS ? win() : nextCountRound(), 2100);
+        later(() => cntRound >= ROUNDS ? win() : nextCountRound(), 2100);
       }else{
         b.classList.add('wobble'); sndOops();
         setTimeout(()=>b.classList.remove('wobble'), 600);
@@ -744,7 +765,7 @@ function nextShapeRound(){
         speak('shape-yes-' + sh);
         shpRound++;
         starRow($('shapes-stars'), ROUNDS, shpRound);
-        setTimeout(() => shpRound >= ROUNDS ? win() : nextShapeRound(), 2100);
+        later(() => shpRound >= ROUNDS ? win() : nextShapeRound(), 2100);
       }else{
         b.classList.add('wobble'); sndOops();
         setTimeout(()=>b.classList.remove('wobble'), 600);
