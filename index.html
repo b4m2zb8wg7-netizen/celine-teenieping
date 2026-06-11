@@ -341,72 +341,100 @@ function pingSVG(p){
 }
 
 /* =====================================================
-   SPEECH — every instruction is spoken out loud
+   VOICE — pre-recorded clips in voice/*.mp3, played through
+   Web Audio (the same system as the sound effects, which is
+   reliable on iPad). The built-in speech engine is only a
+   backup if a clip can't load. Regenerate clips by editing
+   gen_voice.py to match VOICE_LINES, then running it.
    ===================================================== */
-let chosenVoice = null;
-function pickVoice(){
-  const vs = speechSynthesis.getVoices();
-  if(!vs.length) return;
-  chosenVoice =
-    vs.find(v => /karen/i.test(v.name)) ||                    // iPad Aussie voice
-    vs.find(v => v.lang === 'en-AU') ||
-    vs.find(v => /samantha|female|zira/i.test(v.name)) ||
-    vs.find(v => v.lang && v.lang.startsWith('en')) || vs[0];
-}
-pickVoice();
-if('onvoiceschanged' in speechSynthesis) speechSynthesis.onvoiceschanged = pickVoice;
+const VOICE_LINES = (() => {
+  const v = {
+    'welcome':     "Hi Celine! Welcome to Teenieping Land! Pick a game! Tap a picture!",
+    'hub':         "Pick a game, Celine! Tap a picture!",
+    'catch-intro': "Oh no! The Teeniepings are floating away! Catch them, Celine! Tap the Teeniepings!",
+    'now-number':  "Now tap the big number!",
+    'count-q':     "How many Teeniepings can you see? Tap each Teenieping to count them. Then tap the big number!",
+    'count-no':    "Hmm, let's count again! Tap each Teenieping!",
+    'praise-1':    "Hooray! You did it, Celine! You are amazing!",
+    'praise-2':    "Woohoo! Great job, Celine! The Teeniepings are so happy!",
+    'praise-3':    "Yay Celine! You are a Teenieping superstar!",
+  };
+  const words = ['one','two','three','four','five','six','seven','eight','nine','ten'];
+  words.forEach((w, i) => v['num-' + (i+1)] = w[0].toUpperCase() + w.slice(1) + '!');
+  for(let n = 1; n <= 5; n++){
+    v['count-yes-' + n] = 'Yes! ' + words[n-1][0].toUpperCase() + words[n-1].slice(1) +
+      (n === 1 ? ' Teenieping!' : ' Teeniepings!') + ' Well done, Celine!';
+  }
+  PINGS.forEach(p => {
+    const sw = SHAPE_NAMES[p.emblem];
+    v['color-q-' + p.color]     = `Where is the ${p.color} Teenieping? Tap the ${p.color} one!`;
+    v['color-yes-' + p.color]   = `Yay! That's ${p.color}! That's ${p.name}!`;
+    v['color-no-' + p.color]    = `Oopsie! That one is ${p.color}.`;
+    v['shape-q-' + p.emblem]    = `${p.name} lost her ${sw}! Can you find it, Celine? Tap the ${sw}!`;
+    v['shape-yes-' + p.emblem]  = `Yay! You found the ${sw}! ${p.name} is so happy!`;
+    v['shape-no-' + p.emblem]   = `Oopsie, that's the ${sw}!`;
+    v['shape-find-' + p.emblem] = `Find the ${sw}!`;
+  });
+  return v;
+})();
 
-let currentPrompt = '';
+const clipCache = {};
+function loadClip(key){
+  if(!clipCache[key]){
+    clipCache[key] = fetch('voice/' + key + '.mp3')
+      .then(r => { if(!r.ok) throw new Error('missing clip'); return r.arrayBuffer(); })
+      .then(buf => audio().decodeAudioData(buf));
+    clipCache[key].catch(() => {});   // handled at play time
+  }
+  return clipCache[key];
+}
+
+let voiceSeq = 0, currentPromptKeys = [], liveSource = null;
+// speak('hub') or speak(['num-3','now-number']) — clips play one after another
+function speak(keys, remember = false){
+  if(typeof keys === 'string') keys = [keys];
+  if(remember) currentPromptKeys = keys;
+  const my = ++voiceSeq;
+  try{ if(liveSource) liveSource.stop(); }catch(e){}
+  liveSource = null;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  playFrom(keys, 0, my);
+}
+function playFrom(keys, i, my){
+  if(my !== voiceSeq || i >= keys.length) return;
+  loadClip(keys[i]).then(buf => {
+    if(my !== voiceSeq) return;
+    const a = audio(), src = a.createBufferSource();
+    src.buffer = buf;
+    src.connect(a.destination);
+    liveSource = src;
+    src.onended = () => { if(my === voiceSeq) playFrom(keys, i + 1, my); };
+    src.start();
+  }).catch(() => {
+    if(my !== voiceSeq) return;
+    ttsFallback(VOICE_LINES[keys[i]], () => { if(my === voiceSeq) playFrom(keys, i + 1, my); });
+  });
+}
 let keepUtterance = null;   // iOS garbage-collects utterances that aren't referenced
-let speakSeq = 0;
-
-// iOS only allows speech after it has been "primed" by a real finger tap,
-// so on the very first tap anywhere we speak a silent blip to unlock it.
-function primeSpeech(){
-  try{
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0;
-    speechSynthesis.speak(u);
-  }catch(e){}
-}
-document.addEventListener('pointerdown', primeSpeech, { once:true, capture:true });
-
-// iPads mute the speech engine (but not game sounds) when the device is in
-// Silent mode. Declaring a "playback" audio session tells iOS this page's
-// audio is media, so the voice plays regardless of the silent switch.
-try{ if('audioSession' in navigator) navigator.audioSession.type = 'playback'; }catch(e){}
-
-function speak(text, remember = false){
-  if(remember) currentPrompt = text;
-  const my = ++speakSeq;
-  try{ speechSynthesis.cancel(); }catch(e){ return; }
-  // iOS bug: speak() immediately after cancel() is silently dropped —
-  // a short delay makes it reliable.
-  setTimeout(() => { if(my === speakSeq) speakNow(text, true, my); }, 120);
-}
-function speakNow(text, useChosenVoice, my){
+function ttsFallback(text, done){
+  if(!text) return done();
+  let called = false;
+  const next = () => { if(!called){ called = true; done(); } };
   try{
     const u = new SpeechSynthesisUtterance(text);
     keepUtterance = u;
-    if(useChosenVoice && chosenVoice){ u.voice = chosenVoice; u.lang = chosenVoice.lang; }
-    else { u.lang = 'en-AU'; }
-    u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
-    let started = false;
-    u.onstart = () => { started = true; };
-    speechSynthesis.resume();              // iOS sometimes leaves the engine paused
+    u.lang = 'en-AU'; u.rate = 0.92; u.pitch = 1.2;
+    u.onend = next; u.onerror = next;
     speechSynthesis.speak(u);
-    // If the chosen voice never starts (some iOS voices fail silently),
-    // retry once with the system default voice.
-    if(useChosenVoice){
-      setTimeout(() => {
-        if(!started && my === speakSeq){
-          try{ speechSynthesis.cancel(); }catch(e){}
-          setTimeout(() => { if(my === speakSeq) speakNow(text, false, my); }, 120);
-        }
-      }, 1500);
-    }
-  }catch(e){ /* speech unsupported — game still playable visually */ }
+  }catch(e){ next(); }
 }
+
+// iPads mute some page audio when the device is in Silent mode. Declaring a
+// "playback" audio session tells iOS this page's audio is media, not a beep.
+try{ if('audioSession' in navigator) navigator.audioSession.type = 'playback'; }catch(e){}
+
+// start fetching every clip immediately so they're ready by the first tap
+Object.keys(VOICE_LINES).forEach(loadClip);
 
 /* =====================================================
    SOUND EFFECTS — tiny synth, no audio files needed
@@ -430,7 +458,6 @@ const sndOops = () => { tone(330,.18,'sine',0,.12); tone(262,.22,'sine',.18,.12)
 /* =====================================================
    SCREENS + SHARED UI
    ===================================================== */
-const NUM_WORDS = ['one','two','three','four','five','six','seven','eight','nine','ten'];
 let currentGame = null;
 let catchTimers = [];
 
@@ -443,7 +470,7 @@ function stopCatchTimers(){ catchTimers.forEach(clearInterval); catchTimers = []
 function goHome(){
   stopCatchTimers();
   showScreen('s-hub');
-  speak('Pick a game, Celine! Tap a picture!', true);
+  speak('hub', true);
 }
 function starRow(el, total, filled){
   el.innerHTML = '';
@@ -465,16 +492,11 @@ function confetti(){
     setTimeout(()=>c.remove(), 5500);
   }
 }
-const PRAISE = [
-  'Hooray! You did it, Celine! You are amazing!',
-  'Woohoo! Great job, Celine! The Teeniepings are so happy!',
-  'Yay Celine! You are a Teenieping superstar!',
-];
 function win(){
   stopCatchTimers();
   $('overlay-win').classList.add('show');
   confetti(); sndYay();
-  speak(PRAISE[Math.floor(Math.random()*PRAISE.length)], true);
+  speak('praise-' + (1 + Math.floor(Math.random()*3)), true);
 }
 
 /* =====================================================
@@ -509,9 +531,7 @@ function spawnFloater(){
     clearInterval(mover);
     sndPop();
     caught++;
-    speak(caught >= CATCH_GOAL
-      ? NUM_WORDS[caught-1] + '!'
-      : NUM_WORDS[caught-1] + '!');
+    speak('num-' + caught);
     // sparkle where the Teenieping was
     const s = document.createElement('div');
     s.className = 'pop-spark'; s.textContent = '✨';
@@ -531,7 +551,7 @@ function startCatch(){
   $('catch-arena').innerHTML = '';
   heartsRow();
   showScreen('s-catch');
-  speak('Oh no! The Teeniepings are floating away! Catch them, Celine! Tap the Teeniepings!', true);
+  speak('catch-intro', true);
   for(let i=0;i<4;i++) setTimeout(spawnFloater, i*350);
 }
 
@@ -558,19 +578,19 @@ function nextColorRound(){
       if(p === colTarget){
         colBusy = true;
         b.classList.add('happy'); sndYay();
-        speak('Yay! That is ' + p.color + '! That is ' + p.name + '!');
+        speak('color-yes-' + p.color);
         colRound++;
         starRow($('colors-stars'), ROUNDS, colRound);
         setTimeout(() => colRound >= ROUNDS ? win() : nextColorRound(), 1900);
       }else{
         b.classList.add('wobble'); sndOops();
         setTimeout(()=>b.classList.remove('wobble'), 600);
-        speak('Oopsie! That one is ' + p.color + '. Where is the ' + colTarget.color + ' Teenieping?');
+        speak(['color-no-' + p.color, 'color-q-' + colTarget.color]);
       }
     });
     row.appendChild(b);
   });
-  speak('Where is the ' + colTarget.color + ' Teenieping? Tap the ' + colTarget.color + ' one!', true);
+  speak('color-q-' + colTarget.color, true);
 }
 function startColors(){
   currentGame = 'colors';
@@ -604,9 +624,9 @@ function nextCountRound(){
       sndDing();
       cntTapped++;
       if(cntTapped === cntTarget){
-        speak(NUM_WORDS[cntTapped-1] + '! Now tap the big number!');
+        speak(['num-' + cntTapped, 'now-number']);
       }else{
-        speak(NUM_WORDS[cntTapped-1] + '!');
+        speak('num-' + cntTapped);
       }
     });
     arena.appendChild(d);
@@ -621,21 +641,21 @@ function nextCountRound(){
       if(n === cntTarget){
         cntBusy = true;
         b.classList.add('happy'); sndYay();
-        speak('Yes! ' + NUM_WORDS[n-1] + ' Teeniepings! Well done, Celine!');
+        speak('count-yes-' + n);
         cntRound++;
         starRow($('count-stars'), ROUNDS, cntRound);
         setTimeout(() => cntRound >= ROUNDS ? win() : nextCountRound(), 2100);
       }else{
         b.classList.add('wobble'); sndOops();
         setTimeout(()=>b.classList.remove('wobble'), 600);
-        speak('Hmm, let us count again! Tap each Teenieping!');
+        speak('count-no');
         cntTapped = 0;
         document.querySelectorAll('.countable').forEach(c => c.classList.remove('counted'));
       }
     });
     row.appendChild(b);
   }
-  speak('How many Teeniepings can you see? Tap each Teenieping to count them. Then tap the big number!', true);
+  speak('count-q', true);
 }
 function startCount(){
   currentGame = 'count';
@@ -667,19 +687,19 @@ function nextShapeRound(){
       if(sh === shpTarget){
         shpBusy = true;
         b.classList.add('happy'); sndYay();
-        speak('Yay! You found the ' + SHAPE_NAMES[sh] + '! ' + owner.name + ' is so happy!');
+        speak('shape-yes-' + sh);
         shpRound++;
         starRow($('shapes-stars'), ROUNDS, shpRound);
         setTimeout(() => shpRound >= ROUNDS ? win() : nextShapeRound(), 2100);
       }else{
         b.classList.add('wobble'); sndOops();
         setTimeout(()=>b.classList.remove('wobble'), 600);
-        speak('Oopsie, that is the ' + SHAPE_NAMES[sh] + '! Find the ' + SHAPE_NAMES[shpTarget] + '!');
+        speak(['shape-no-' + sh, 'shape-find-' + shpTarget]);
       }
     });
     row.appendChild(b);
   });
-  speak(owner.name + ' lost her ' + SHAPE_NAMES[shpTarget] + '! Can you find it, Celine? Tap the ' + SHAPE_NAMES[shpTarget] + '!', true);
+  speak('shape-q-' + shpTarget, true);
 }
 function startShapes(){
   currentGame = 'shapes';
@@ -703,14 +723,14 @@ $('btn-start').addEventListener('pointerdown', () => {
   audio();                       // unlock sound on first tap (iPad needs this)
   sndYay();
   showScreen('s-hub');
-  speak('Hi Celine! Welcome to Teenieping Land! Pick a game! Tap a picture!', true);
+  speak('welcome', true);
 });
 
 document.querySelectorAll('.hub-card').forEach(card => {
   card.addEventListener('pointerdown', () => { sndDing(); GAME_STARTERS[card.dataset.game](); });
 });
 document.querySelectorAll('.btn-home').forEach(b => b.addEventListener('pointerdown', goHome));
-document.querySelectorAll('.btn-say').forEach(b => b.addEventListener('pointerdown', () => speak(currentPrompt)));
+document.querySelectorAll('.btn-say').forEach(b => b.addEventListener('pointerdown', () => speak(currentPromptKeys)));
 
 $('btn-replay').addEventListener('pointerdown', () => { GAME_STARTERS[currentGame](); });
 $('btn-winhome').addEventListener('pointerdown', goHome);
