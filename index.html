@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Celine's Teenieping Land</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  /* ---------- Theme ---------- */
+  :root{
+    --sky1:#ffe3f1; --sky2:#e6d8ff; --sky3:#d4ecff;
+    --pink:#ff6fae; --pink-dark:#e84d93;
+    --purple:#9c6fd0; --yellow:#ffd95e;
+    --text:#7a3f63;
+    --card:#ffffff;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent;
+     -webkit-touch-callout:none; -webkit-user-select:none; user-select:none;
+     touch-action:manipulation; }
+  html,body{ margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
+  body{
+    font-family:"Chalkboard SE","Comic Sans MS","Marker Felt",-apple-system,sans-serif;
+    background:linear-gradient(160deg,var(--sky1) 0%,var(--sky2) 55%,var(--sky3) 100%);
+    color:var(--text);
+    position:fixed; inset:0;
+  }
+
+  /* floating background sparkles */
+  .bg-spark{ position:fixed; font-size:4vmin; opacity:.5; pointer-events:none;
+    animation:floaty 6s ease-in-out infinite; z-index:0; }
+  @keyframes floaty{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-3vmin) } }
+
+  /* ---------- Screens ---------- */
+  .screen{ position:absolute; inset:0; display:none; flex-direction:column;
+    align-items:center; justify-content:center; padding:max(2vmin, env(safe-area-inset-top)) 2vmin 2vmin;
+    z-index:1; }
+  .screen.show{ display:flex; }
+
+  /* ---------- Title ---------- */
+  #s-title h1{
+    font-size:9vmin; margin:0 0 1vmin; text-align:center; color:var(--pink-dark);
+    text-shadow:0 .8vmin 0 #ffffffaa; letter-spacing:.2vmin;
+  }
+  #s-title .subtitle{ font-size:4.5vmin; margin-bottom:3vmin; color:var(--purple); }
+  .ping-parade{ display:flex; gap:2vmin; margin-bottom:4vmin; flex-wrap:wrap;
+    justify-content:center; max-width:94vw; }
+  .ping-parade .ping{ width:16vmin; height:16vmin; animation:bounce 1.4s ease-in-out infinite; }
+  .ping-parade .ping:nth-child(2){ animation-delay:.15s }
+  .ping-parade .ping:nth-child(3){ animation-delay:.3s }
+  .ping-parade .ping:nth-child(4){ animation-delay:.45s }
+  .ping-parade .ping:nth-child(5){ animation-delay:.6s }
+  .ping-parade .ping:nth-child(6){ animation-delay:.75s }
+  @keyframes bounce{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-3vmin) } }
+
+  .big-btn{
+    border:none; cursor:pointer; font-family:inherit;
+    background:linear-gradient(180deg,#ff8ec0,var(--pink));
+    color:#fff; font-size:7vmin; padding:3.5vmin 10vmin; border-radius:100vmin;
+    box-shadow:0 1.5vmin 0 var(--pink-dark), 0 2.5vmin 3vmin #e84d9355;
+    display:flex; align-items:center; gap:2.5vmin;
+  }
+  .big-btn:active{ transform:translateY(1vmin); box-shadow:0 .5vmin 0 var(--pink-dark); }
+
+  /* ---------- Hub ---------- */
+  #s-hub h2{ font-size:6vmin; margin:0 0 3vmin; color:var(--pink-dark); text-align:center; }
+  .hub-grid{
+    display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
+    gap:3vmin; width:min(92vmin, 94vw);
+  }
+  .hub-card{
+    background:var(--card); border:none; border-radius:5vmin; cursor:pointer;
+    padding:2.5vmin; display:flex; flex-direction:column; align-items:center; gap:1vmin;
+    box-shadow:0 1.2vmin 0 #e8c8de, 0 2vmin 3vmin #c79ab455;
+    font-family:inherit;
+  }
+  .hub-card:active{ transform:scale(.95); }
+  .hub-card .ping{ width:18vmin; height:18vmin; }
+  .hub-card .icon{ font-size:7vmin; line-height:1; }
+  .hub-card .label{ font-size:3.4vmin; color:var(--purple); font-weight:bold; }
+
+  /* ---------- Game chrome ---------- */
+  .topbar{
+    position:absolute; top:max(1.5vmin, env(safe-area-inset-top)); left:0; right:0;
+    display:flex; justify-content:space-between; padding:0 2vmin; z-index:5;
+  }
+  .round-btn{
+    width:11vmin; height:11vmin; border-radius:50%; border:none; cursor:pointer;
+    background:#fff; font-size:5.5vmin; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 .8vmin 0 #e8c8de;
+  }
+  .round-btn:active{ transform:scale(.9); }
+
+  .stars{ display:flex; gap:1.5vmin; margin-bottom:2vmin; }
+  .stars svg{ width:7vmin; height:7vmin; }
+
+  .hearts{ display:flex; gap:1vmin; margin-bottom:1vmin; flex-wrap:wrap; justify-content:center; }
+  .hearts svg{ width:5.5vmin; height:5.5vmin; }
+
+  /* ---------- Catch game ---------- */
+  #catch-arena{ position:relative; width:100%; flex:1; }
+  .floater{
+    position:absolute; width:17vmin; height:17vmin; cursor:pointer;
+    transition:left 2.6s ease-in-out, top 2.6s ease-in-out;
+    animation:wiggle 2s ease-in-out infinite;
+  }
+  @keyframes wiggle{ 0%,100%{ rotate:-6deg } 50%{ rotate:6deg } }
+  .pop-spark{
+    position:absolute; font-size:9vmin; pointer-events:none; z-index:6;
+    animation:popspark .7s ease-out forwards;
+  }
+  @keyframes popspark{
+    0%{ transform:scale(.3); opacity:1 }
+    100%{ transform:scale(2.2); opacity:0 }
+  }
+
+  /* ---------- Colors / shapes rows ---------- */
+  .prompt-ping{ width:24vmin; height:24vmin; margin-bottom:2vmin; }
+  .choice-row{ display:flex; gap:4vmin; justify-content:center; flex-wrap:wrap; }
+  .choice{
+    background:var(--card); border:none; border-radius:5vmin; cursor:pointer; padding:2vmin;
+    box-shadow:0 1.2vmin 0 #e8c8de;
+  }
+  .choice:active{ transform:scale(.93); }
+  .choice .ping, .choice svg.shape{ width:24vmin; height:24vmin; display:block; }
+
+  /* ---------- Counting ---------- */
+  #count-arena{ position:relative; width:min(96vw,100vmin); flex:1; max-height:52vh; }
+  .countable{ position:absolute; width:16vmin; height:16vmin; cursor:pointer;
+    transform:translate(-50%,-50%); }
+  .countable.counted{ filter:drop-shadow(0 0 2vmin gold); }
+  .countable .tick{
+    position:absolute; top:-1vmin; right:-1vmin; font-size:6vmin; display:none;
+  }
+  .countable.counted .tick{ display:block; }
+  .num-row{ display:flex; gap:3vmin; justify-content:center; padding-bottom:1vmin; }
+  .num-btn{
+    width:15vmin; height:15vmin; border-radius:50%; border:none; cursor:pointer;
+    background:linear-gradient(180deg,#c0a4ec,var(--purple)); color:#fff;
+    font-family:inherit; font-size:7.5vmin; font-weight:bold;
+    box-shadow:0 1vmin 0 #7b4fb0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; line-height:1;
+  }
+  .num-btn:active{ transform:translateY(.8vmin); box-shadow:0 .2vmin 0 #7b4fb0; }
+  .num-btn .dots{ font-size:2.2vmin; letter-spacing:.3vmin; margin-top:.6vmin; }
+
+  /* fun feedback animations */
+  .happy{ animation:happy .6s ease; }
+  @keyframes happy{ 0%{transform:scale(1)} 40%{transform:scale(1.25) rotate(6deg)} 100%{transform:scale(1)} }
+  .wobble{ animation:wobble .5s ease; }
+  @keyframes wobble{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2vmin)} 75%{transform:translateX(2vmin)} }
+
+  /* ---------- Win overlay ---------- */
+  #overlay-win{
+    position:absolute; inset:0; z-index:20; display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+    background:#ffd9ecf2;
+  }
+  #overlay-win.show{ display:flex; }
+  #overlay-win .trophy{ font-size:16vmin; animation:bounce 1.2s ease-in-out infinite; }
+  #overlay-win .winstars{ display:flex; gap:2vmin; margin:2vmin 0 4vmin; }
+  #overlay-win .winstars svg{ width:13vmin; height:13vmin; animation:happy .9s ease infinite alternate; }
+  #overlay-win .winstars svg:nth-child(2){ animation-delay:.2s }
+  #overlay-win .winstars svg:nth-child(3){ animation-delay:.4s }
+  .win-btns{ display:flex; gap:5vmin; }
+  .win-btn{
+    width:20vmin; height:20vmin; border-radius:50%; border:none; cursor:pointer;
+    font-size:9vmin; background:#fff; box-shadow:0 1.2vmin 0 #e8a4c8;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .win-btn:active{ transform:scale(.92); }
+
+  /* confetti */
+  .confetto{
+    position:fixed; top:-6vmin; z-index:30; pointer-events:none; font-size:4vmin;
+    animation:fall linear forwards;
+  }
+  @keyframes fall{
+    0%{ transform:translateY(0) rotate(0deg); opacity:1 }
+    100%{ transform:translateY(110vh) rotate(540deg); opacity:.8 }
+  }
+</style>
+</head>
+<body>
+
+<!-- decorative background sparkles -->
+<div class="bg-spark" style="left:8%;  top:12%">✨</div>
+<div class="bg-spark" style="left:85%; top:8%;  animation-delay:1s">⭐</div>
+<div class="bg-spark" style="left:15%; top:80%; animation-delay:2s">💖</div>
+<div class="bg-spark" style="left:90%; top:70%; animation-delay:3s">✨</div>
+<div class="bg-spark" style="left:50%; top:5%;  animation-delay:1.5s">🌈</div>
+
+<!-- ============ TITLE ============ -->
+<div class="screen show" id="s-title">
+  <h1>Celine's Teenieping Land</h1>
+  <div class="subtitle">💖 Catch! Teenieping 💖</div>
+  <div class="ping-parade" id="title-parade"></div>
+  <button class="big-btn" id="btn-start">▶&nbsp; PLAY</button>
+</div>
+
+<!-- ============ HUB ============ -->
+<div class="screen" id="s-hub">
+  <h2>Pick a game! 💕</h2>
+  <div class="hub-grid">
+    <button class="hub-card" data-game="catch">
+      <span class="icon">✨🖐️</span><span class="ping" data-ping="0"></span>
+      <span class="label">Catch!</span>
+    </button>
+    <button class="hub-card" data-game="colors">
+      <span class="icon">🌈</span><span class="ping" data-ping="2"></span>
+      <span class="label">Colours</span>
+    </button>
+    <button class="hub-card" data-game="count">
+      <span class="icon">1️⃣2️⃣3️⃣</span><span class="ping" data-ping="1"></span>
+      <span class="label">Counting</span>
+    </button>
+    <button class="hub-card" data-game="shapes">
+      <span class="icon">💛⭐</span><span class="ping" data-ping="4"></span>
+      <span class="label">Shapes</span>
+    </button>
+  </div>
+</div>
+
+<!-- ============ CATCH ============ -->
+<div class="screen" id="s-catch">
+  <div class="topbar">
+    <button class="round-btn btn-home">🏠</button>
+    <button class="round-btn btn-say">🔊</button>
+  </div>
+  <div style="height:12vmin"></div>
+  <div class="hearts" id="catch-hearts"></div>
+  <div id="catch-arena"></div>
+</div>
+
+<!-- ============ COLORS ============ -->
+<div class="screen" id="s-colors">
+  <div class="topbar">
+    <button class="round-btn btn-home">🏠</button>
+    <button class="round-btn btn-say">🔊</button>
+  </div>
+  <div class="stars" id="colors-stars"></div>
+  <div style="font-size:10vmin" id="colors-blob">🎨</div>
+  <div style="height:3vmin"></div>
+  <div class="choice-row" id="colors-row"></div>
+</div>
+
+<!-- ============ COUNTING ============ -->
+<div class="screen" id="s-count">
+  <div class="topbar">
+    <button class="round-btn btn-home">🏠</button>
+    <button class="round-btn btn-say">🔊</button>
+  </div>
+  <div class="stars" id="count-stars"></div>
+  <div id="count-arena"></div>
+  <div class="num-row" id="num-row"></div>
+</div>
+
+<!-- ============ SHAPES ============ -->
+<div class="screen" id="s-shapes">
+  <div class="topbar">
+    <button class="round-btn btn-home">🏠</button>
+    <button class="round-btn btn-say">🔊</button>
+  </div>
+  <div class="stars" id="shapes-stars"></div>
+  <div class="ping prompt-ping" id="shapes-ping"></div>
+  <div class="choice-row" id="shapes-row"></div>
+</div>
+
+<!-- ============ WIN ============ -->
+<div id="overlay-win">
+  <div class="trophy">🏆</div>
+  <div class="winstars">
+    <svg viewBox="0 0 100 100"><polygon points="50,4 61,36 95,36 67,57 77,90 50,70 23,90 33,57 5,36 39,36" fill="#ffc93c" stroke="#f5a623" stroke-width="3"/></svg>
+    <svg viewBox="0 0 100 100"><polygon points="50,4 61,36 95,36 67,57 77,90 50,70 23,90 33,57 5,36 39,36" fill="#ffc93c" stroke="#f5a623" stroke-width="3"/></svg>
+    <svg viewBox="0 0 100 100"><polygon points="50,4 61,36 95,36 67,57 77,90 50,70 23,90 33,57 5,36 39,36" fill="#ffc93c" stroke="#f5a623" stroke-width="3"/></svg>
+  </div>
+  <div class="win-btns">
+    <button class="win-btn" id="btn-replay">🔁</button>
+    <button class="win-btn" id="btn-winhome">🏠</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* =====================================================
+   TEENIEPING CHARACTERS — drawn as inline SVG
+   ===================================================== */
+const PINGS = [
+  { name:'Heartsping',  color:'pink',   body:'#ffa1c9', dark:'#f06ba8', emblem:'heart',  emColor:'#ff3d7f' },
+  { name:'Joyping',     color:'yellow', body:'#ffd95e', dark:'#f0ad2d', emblem:'star',   emColor:'#ff9800' },
+  { name:'Lalaping',    color:'purple', body:'#c5a3e8', dark:'#9c6fd0', emblem:'note',   emColor:'#7b3fbf' },
+  { name:'Aroming',     color:'orange', body:'#ffb27a', dark:'#f08a3e', emblem:'flower', emColor:'#ff6d2e' },
+  { name:'Steadyping',  color:'green',  body:'#9fdd8e', dark:'#6cbf58', emblem:'clover', emColor:'#3c9e2f' },
+  { name:'Flyping',     color:'blue',   body:'#90c8f8', dark:'#5a9be0', emblem:'cloud',  emColor:'#3d7fd6' },
+];
+const SHAPE_NAMES = { heart:'heart', star:'star', note:'music note', flower:'flower', clover:'lucky clover', cloud:'cloud' };
+
+function shapeInner(name, color){
+  switch(name){
+    case 'heart':
+      return `<path d="M50 86 C22 64 8 46 8 30 C8 15 19 7 31 7 C40 7 47 12 50 20 C53 12 60 7 69 7 C81 7 92 15 92 30 C92 46 78 64 50 86Z" fill="${color}"/>`;
+    case 'star':
+      return `<polygon points="50,4 61,36 95,36 67,57 77,90 50,70 23,90 33,57 5,36 39,36" fill="${color}"/>`;
+    case 'note':
+      return `<ellipse cx="33" cy="77" rx="15" ry="12" fill="${color}"/>
+              <rect x="42" y="12" width="8" height="66" rx="4" fill="${color}"/>
+              <path d="M50 12 C68 18 76 29 73 44 C67 32 59 28 50 27 Z" fill="${color}"/>`;
+    case 'flower':
+      return `<circle cx="50" cy="29" r="15" fill="${color}"/><circle cx="70" cy="43.5" r="15" fill="${color}"/>
+              <circle cx="62.3" cy="67" r="15" fill="${color}"/><circle cx="37.7" cy="67" r="15" fill="${color}"/>
+              <circle cx="30" cy="43.5" r="15" fill="${color}"/><circle cx="50" cy="50" r="11" fill="#ffd95e"/>`;
+    case 'clover':
+      return `<circle cx="35" cy="35" r="17" fill="${color}"/><circle cx="65" cy="35" r="17" fill="${color}"/>
+              <circle cx="35" cy="65" r="17" fill="${color}"/><circle cx="65" cy="65" r="17" fill="${color}"/>
+              <path d="M50 66 C52 78 56 86 63 93" stroke="${color}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+    case 'cloud':
+      return `<ellipse cx="50" cy="62" rx="34" ry="20" fill="${color}"/>
+              <circle cx="36" cy="48" r="16" fill="${color}"/><circle cx="58" cy="42" r="20" fill="${color}"/>`;
+  }
+  return '';
+}
+function shapeSVG(name, color){
+  return `<svg class="shape" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${shapeInner(name,color)}</svg>`;
+}
+function pingSVG(p){
+  return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+    <circle cx="28" cy="22" r="13" fill="${p.dark}"/>
+    <circle cx="72" cy="22" r="13" fill="${p.dark}"/>
+    <circle cx="28" cy="22" r="7"  fill="${p.body}"/>
+    <circle cx="72" cy="22" r="7"  fill="${p.body}"/>
+    <circle cx="50" cy="58" r="38" fill="${p.body}" stroke="${p.dark}" stroke-width="2.5"/>
+    <g transform="translate(50,33) scale(0.22) translate(-50,-50)">${shapeInner(p.emblem, p.emColor)}</g>
+    <circle cx="37" cy="56" r="6.5" fill="#3a2434"/><circle cx="39.5" cy="53.5" r="2.4" fill="#fff"/>
+    <circle cx="63" cy="56" r="6.5" fill="#3a2434"/><circle cx="65.5" cy="53.5" r="2.4" fill="#fff"/>
+    <path d="M42 70 Q50 78 58 70" stroke="${p.dark}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="29" cy="66" rx="5.5" ry="3.8" fill="#ff9ec3" opacity=".75"/>
+    <ellipse cx="71" cy="66" rx="5.5" ry="3.8" fill="#ff9ec3" opacity=".75"/>
+  </svg>`;
+}
+
+/* =====================================================
+   SPEECH — every instruction is spoken out loud
+   ===================================================== */
+let chosenVoice = null;
+function pickVoice(){
+  const vs = speechSynthesis.getVoices();
+  if(!vs.length) return;
+  chosenVoice =
+    vs.find(v => /karen/i.test(v.name)) ||                    // iPad Aussie voice
+    vs.find(v => v.lang === 'en-AU') ||
+    vs.find(v => /samantha|female|zira/i.test(v.name)) ||
+    vs.find(v => v.lang && v.lang.startsWith('en')) || vs[0];
+}
+pickVoice();
+if('onvoiceschanged' in speechSynthesis) speechSynthesis.onvoiceschanged = pickVoice;
+
+let currentPrompt = '';
+function speak(text, remember = false){
+  if(remember) currentPrompt = text;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    if(chosenVoice) u.voice = chosenVoice;
+    u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
+    speechSynthesis.speak(u);
+  }catch(e){ /* speech unsupported — game still playable visually */ }
+}
+
+/* =====================================================
+   SOUND EFFECTS — tiny synth, no audio files needed
+   ===================================================== */
+let actx = null;
+function audio(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); return actx; }
+function tone(freq, dur, type, when, vol, slideTo){
+  const a = audio(), o = a.createOscillator(), g = a.createGain();
+  const t = a.currentTime + (when||0);
+  o.type = type||'sine'; o.frequency.setValueAtTime(freq, t);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t+dur);
+  g.gain.setValueAtTime(vol||0.18, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+dur+0.05);
+}
+const sndPop  = () => tone(620, .18, 'sine', 0, .25, 160);
+const sndDing = () => tone(880, .25, 'triangle', 0, .2);
+const sndYay  = () => { [523,659,784,1047].forEach((f,i)=>tone(f,.22,'triangle',i*.11,.18)); };
+const sndOops = () => { tone(330,.18,'sine',0,.12); tone(262,.22,'sine',.18,.12); };
+
+/* =====================================================
+   SCREENS + SHARED UI
+   ===================================================== */
+const NUM_WORDS = ['one','two','three','four','five','six','seven','eight','nine','ten'];
+let currentGame = null;
+let catchTimers = [];
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  $(id).classList.add('show');
+  $('overlay-win').classList.remove('show');
+}
+function stopCatchTimers(){ catchTimers.forEach(clearInterval); catchTimers = []; }
+function goHome(){
+  stopCatchTimers();
+  showScreen('s-hub');
+  speak('Pick a game, Celine! Tap a picture!', true);
+}
+function starRow(el, total, filled){
+  el.innerHTML = '';
+  for(let i=0;i<total;i++){
+    el.innerHTML += `<svg viewBox="0 0 100 100"><polygon points="50,4 61,36 95,36 67,57 77,90 50,70 23,90 33,57 5,36 39,36"
+      fill="${i<filled ? '#ffc93c' : '#ffffff'}" stroke="#f5a623" stroke-width="4"/></svg>`;
+  }
+}
+function confetti(){
+  const stuff = ['💖','⭐','✨','💜','💛','🌸','🎀'];
+  for(let i=0;i<55;i++){
+    const c = document.createElement('div');
+    c.className = 'confetto';
+    c.textContent = stuff[Math.floor(Math.random()*stuff.length)];
+    c.style.left = Math.random()*100 + 'vw';
+    c.style.animationDuration = (2.2 + Math.random()*2.2) + 's';
+    c.style.animationDelay = (Math.random()*0.8) + 's';
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(), 5500);
+  }
+}
+const PRAISE = [
+  'Hooray! You did it, Celine! You are amazing!',
+  'Woohoo! Great job, Celine! The Teeniepings are so happy!',
+  'Yay Celine! You are a Teenieping superstar!',
+];
+function win(){
+  stopCatchTimers();
+  $('overlay-win').classList.add('show');
+  confetti(); sndYay();
+  speak(PRAISE[Math.floor(Math.random()*PRAISE.length)], true);
+}
+
+/* =====================================================
+   GAME 1 — CATCH! (tap the floating Teeniepings, count to 10)
+   ===================================================== */
+const CATCH_GOAL = 10;
+let caught = 0;
+
+function heartsRow(){
+  const el = $('catch-hearts'); el.innerHTML = '';
+  for(let i=0;i<CATCH_GOAL;i++){
+    el.innerHTML += `<svg viewBox="0 0 100 100">${shapeInner('heart', i<caught ? '#ff3d7f' : '#ffffff')}
+      <path d="M50 86 C22 64 8 46 8 30 C8 15 19 7 31 7 C40 7 47 12 50 20 C53 12 60 7 69 7 C81 7 92 15 92 30 C92 46 78 64 50 86Z"
+        fill="none" stroke="#f06ba8" stroke-width="5"/></svg>`;
+  }
+}
+function randPos(el){
+  el.style.left = (5 + Math.random()*72) + '%';
+  el.style.top  = (2 + Math.random()*70) + '%';
+}
+function spawnFloater(){
+  const arena = $('catch-arena');
+  const p = PINGS[Math.floor(Math.random()*PINGS.length)];
+  const f = document.createElement('div');
+  f.className = 'floater';
+  f.innerHTML = pingSVG(p);
+  randPos(f);
+  arena.appendChild(f);
+  const mover = setInterval(()=>randPos(f), 2600);
+  catchTimers.push(mover);
+  f.addEventListener('pointerdown', () => {
+    clearInterval(mover);
+    sndPop();
+    caught++;
+    speak(caught >= CATCH_GOAL
+      ? NUM_WORDS[caught-1] + '!'
+      : NUM_WORDS[caught-1] + '!');
+    // sparkle where the Teenieping was
+    const s = document.createElement('div');
+    s.className = 'pop-spark'; s.textContent = '✨';
+    s.style.left = f.style.left; s.style.top = f.style.top;
+    arena.appendChild(s);
+    setTimeout(()=>s.remove(), 700);
+    f.remove();
+    heartsRow();
+    if(caught >= CATCH_GOAL){ setTimeout(win, 700); }
+    else { setTimeout(spawnFloater, 500); }
+  }, { once:true });
+}
+function startCatch(){
+  currentGame = 'catch';
+  stopCatchTimers();
+  caught = 0;
+  $('catch-arena').innerHTML = '';
+  heartsRow();
+  showScreen('s-catch');
+  speak('Oh no! The Teeniepings are floating away! Catch them, Celine! Tap the Teeniepings!', true);
+  for(let i=0;i<4;i++) setTimeout(spawnFloater, i*350);
+}
+
+/* =====================================================
+   GAME 2 — COLOURS (tap the Teenieping of the spoken colour)
+   ===================================================== */
+const ROUNDS = 5;
+let colRound = 0, colTarget = null, colBusy = false;
+
+function shuffled(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+
+function nextColorRound(){
+  colBusy = false;
+  starRow($('colors-stars'), ROUNDS, colRound);
+  const options = shuffled(PINGS).slice(0,3);
+  colTarget = options[Math.floor(Math.random()*3)];
+  const row = $('colors-row'); row.innerHTML = '';
+  options.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'choice';
+    b.innerHTML = `<span class="ping" style="display:block;width:24vmin;height:24vmin">${pingSVG(p)}</span>`;
+    b.addEventListener('pointerdown', () => {
+      if(colBusy) return;
+      if(p === colTarget){
+        colBusy = true;
+        b.classList.add('happy'); sndYay();
+        speak('Yay! That is ' + p.color + '! That is ' + p.name + '!');
+        colRound++;
+        starRow($('colors-stars'), ROUNDS, colRound);
+        setTimeout(() => colRound >= ROUNDS ? win() : nextColorRound(), 1900);
+      }else{
+        b.classList.add('wobble'); sndOops();
+        setTimeout(()=>b.classList.remove('wobble'), 600);
+        speak('Oopsie! That one is ' + p.color + '. Where is the ' + colTarget.color + ' Teenieping?');
+      }
+    });
+    row.appendChild(b);
+  });
+  speak('Where is the ' + colTarget.color + ' Teenieping? Tap the ' + colTarget.color + ' one!', true);
+}
+function startColors(){
+  currentGame = 'colors';
+  colRound = 0;
+  showScreen('s-colors');
+  nextColorRound();
+}
+
+/* =====================================================
+   GAME 3 — COUNTING (count the Teeniepings, tap the number)
+   ===================================================== */
+let cntRound = 0, cntTarget = 0, cntTapped = 0, cntBusy = false;
+// preset scatter spots (percent of arena) so Teeniepings never overlap
+const SLOTS = [[18,22],[50,15],[82,22],[25,55],[58,50],[85,60],[15,85],[48,82],[80,88]];
+
+function nextCountRound(){
+  cntBusy = false;
+  starRow($('count-stars'), ROUNDS, cntRound);
+  cntTarget = 1 + Math.floor(Math.random()*5);
+  cntTapped = 0;
+  const p = PINGS[Math.floor(Math.random()*PINGS.length)];
+  const arena = $('count-arena'); arena.innerHTML = '';
+  shuffled(SLOTS).slice(0, cntTarget).forEach(([x,y]) => {
+    const d = document.createElement('div');
+    d.className = 'countable';
+    d.style.left = x+'%'; d.style.top = y+'%';
+    d.innerHTML = pingSVG(p) + '<span class="tick">⭐</span>';
+    d.addEventListener('pointerdown', () => {
+      if(cntBusy || d.classList.contains('counted')) return;
+      d.classList.add('counted','happy');
+      sndDing();
+      cntTapped++;
+      if(cntTapped === cntTarget){
+        speak(NUM_WORDS[cntTapped-1] + '! Now tap the big number!');
+      }else{
+        speak(NUM_WORDS[cntTapped-1] + '!');
+      }
+    });
+    arena.appendChild(d);
+  });
+  const row = $('num-row'); row.innerHTML = '';
+  for(let n=1;n<=5;n++){
+    const b = document.createElement('button');
+    b.className = 'num-btn';
+    b.innerHTML = n + `<span class="dots">${'●'.repeat(n)}</span>`;
+    b.addEventListener('pointerdown', () => {
+      if(cntBusy) return;
+      if(n === cntTarget){
+        cntBusy = true;
+        b.classList.add('happy'); sndYay();
+        speak('Yes! ' + NUM_WORDS[n-1] + ' Teeniepings! Well done, Celine!');
+        cntRound++;
+        starRow($('count-stars'), ROUNDS, cntRound);
+        setTimeout(() => cntRound >= ROUNDS ? win() : nextCountRound(), 2100);
+      }else{
+        b.classList.add('wobble'); sndOops();
+        setTimeout(()=>b.classList.remove('wobble'), 600);
+        speak('Hmm, let us count again! Tap each Teenieping!');
+        cntTapped = 0;
+        document.querySelectorAll('.countable').forEach(c => c.classList.remove('counted'));
+      }
+    });
+    row.appendChild(b);
+  }
+  speak('How many Teeniepings can you see? Tap each Teenieping to count them. Then tap the big number!', true);
+}
+function startCount(){
+  currentGame = 'count';
+  cntRound = 0;
+  showScreen('s-count');
+  nextCountRound();
+}
+
+/* =====================================================
+   GAME 4 — SHAPES (find the spoken shape)
+   ===================================================== */
+let shpRound = 0, shpTarget = null, shpBusy = false;
+
+function nextShapeRound(){
+  shpBusy = false;
+  starRow($('shapes-stars'), ROUNDS, shpRound);
+  const owner = PINGS[Math.floor(Math.random()*PINGS.length)];
+  shpTarget = owner.emblem;
+  $('shapes-ping').innerHTML = pingSVG(owner);
+  const others = shuffled(PINGS.filter(p => p !== owner)).slice(0,2).map(p => p.emblem);
+  const options = shuffled([shpTarget, ...others]);
+  const row = $('shapes-row'); row.innerHTML = '';
+  options.forEach(sh => {
+    const b = document.createElement('button');
+    b.className = 'choice';
+    b.innerHTML = shapeSVG(sh, owner.emColor);   // all same colour, so it's about SHAPE
+    b.addEventListener('pointerdown', () => {
+      if(shpBusy) return;
+      if(sh === shpTarget){
+        shpBusy = true;
+        b.classList.add('happy'); sndYay();
+        speak('Yay! You found the ' + SHAPE_NAMES[sh] + '! ' + owner.name + ' is so happy!');
+        shpRound++;
+        starRow($('shapes-stars'), ROUNDS, shpRound);
+        setTimeout(() => shpRound >= ROUNDS ? win() : nextShapeRound(), 2100);
+      }else{
+        b.classList.add('wobble'); sndOops();
+        setTimeout(()=>b.classList.remove('wobble'), 600);
+        speak('Oopsie, that is the ' + SHAPE_NAMES[sh] + '! Find the ' + SHAPE_NAMES[shpTarget] + '!');
+      }
+    });
+    row.appendChild(b);
+  });
+  speak(owner.name + ' lost her ' + SHAPE_NAMES[shpTarget] + '! Can you find it, Celine? Tap the ' + SHAPE_NAMES[shpTarget] + '!', true);
+}
+function startShapes(){
+  currentGame = 'shapes';
+  shpRound = 0;
+  showScreen('s-shapes');
+  nextShapeRound();
+}
+
+/* =====================================================
+   WIRING
+   ===================================================== */
+const GAME_STARTERS = { catch:startCatch, colors:startColors, count:startCount, shapes:startShapes };
+
+// title parade + hub card characters
+$('title-parade').innerHTML = PINGS.map(p => `<span class="ping">${pingSVG(p)}</span>`).join('');
+document.querySelectorAll('[data-ping]').forEach(el => {
+  el.innerHTML = pingSVG(PINGS[+el.dataset.ping]);
+});
+
+$('btn-start').addEventListener('pointerdown', () => {
+  audio();                       // unlock sound on first tap (iPad needs this)
+  sndYay();
+  showScreen('s-hub');
+  speak('Hi Celine! Welcome to Teenieping Land! Pick a game! Tap a picture!', true);
+});
+
+document.querySelectorAll('.hub-card').forEach(card => {
+  card.addEventListener('pointerdown', () => { sndDing(); GAME_STARTERS[card.dataset.game](); });
+});
+document.querySelectorAll('.btn-home').forEach(b => b.addEventListener('pointerdown', goHome));
+document.querySelectorAll('.btn-say').forEach(b => b.addEventListener('pointerdown', () => speak(currentPrompt)));
+
+$('btn-replay').addEventListener('pointerdown', () => { GAME_STARTERS[currentGame](); });
+$('btn-winhome').addEventListener('pointerdown', goHome);
+
+// stop iPad rubber-band scrolling
+document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+</script>
+</body>
+</html>
