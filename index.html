@@ -371,25 +371,40 @@ function primeSpeech(){
 }
 document.addEventListener('pointerdown', primeSpeech, { once:true, capture:true });
 
+// iPads mute the speech engine (but not game sounds) when the device is in
+// Silent mode. Declaring a "playback" audio session tells iOS this page's
+// audio is media, so the voice plays regardless of the silent switch.
+try{ if('audioSession' in navigator) navigator.audioSession.type = 'playback'; }catch(e){}
+
 function speak(text, remember = false){
   if(remember) currentPrompt = text;
+  const my = ++speakSeq;
+  try{ speechSynthesis.cancel(); }catch(e){ return; }
+  // iOS bug: speak() immediately after cancel() is silently dropped —
+  // a short delay makes it reliable.
+  setTimeout(() => { if(my === speakSeq) speakNow(text, true, my); }, 120);
+}
+function speakNow(text, useChosenVoice, my){
   try{
-    speechSynthesis.cancel();
-    const my = ++speakSeq;
-    // iOS bug: speak() immediately after cancel() is silently dropped —
-    // a short delay makes it reliable.
-    setTimeout(() => {
-      if(my !== speakSeq) return;          // a newer phrase replaced this one
-      try{
-        const u = new SpeechSynthesisUtterance(text);
-        keepUtterance = u;
-        if(chosenVoice) u.voice = chosenVoice;
-        u.lang = chosenVoice ? chosenVoice.lang : 'en-AU';
-        u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
-        speechSynthesis.resume();          // iOS sometimes leaves the engine paused
-        speechSynthesis.speak(u);
-      }catch(e){}
-    }, 120);
+    const u = new SpeechSynthesisUtterance(text);
+    keepUtterance = u;
+    if(useChosenVoice && chosenVoice){ u.voice = chosenVoice; u.lang = chosenVoice.lang; }
+    else { u.lang = 'en-AU'; }
+    u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
+    let started = false;
+    u.onstart = () => { started = true; };
+    speechSynthesis.resume();              // iOS sometimes leaves the engine paused
+    speechSynthesis.speak(u);
+    // If the chosen voice never starts (some iOS voices fail silently),
+    // retry once with the system default voice.
+    if(useChosenVoice){
+      setTimeout(() => {
+        if(!started && my === speakSeq){
+          try{ speechSynthesis.cancel(); }catch(e){}
+          setTimeout(() => { if(my === speakSeq) speakNow(text, false, my); }, 120);
+        }
+      }, 1500);
+    }
   }catch(e){ /* speech unsupported — game still playable visually */ }
 }
 
