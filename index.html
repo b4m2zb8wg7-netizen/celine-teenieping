@@ -357,14 +357,39 @@ pickVoice();
 if('onvoiceschanged' in speechSynthesis) speechSynthesis.onvoiceschanged = pickVoice;
 
 let currentPrompt = '';
+let keepUtterance = null;   // iOS garbage-collects utterances that aren't referenced
+let speakSeq = 0;
+
+// iOS only allows speech after it has been "primed" by a real finger tap,
+// so on the very first tap anywhere we speak a silent blip to unlock it.
+function primeSpeech(){
+  try{
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+document.addEventListener('pointerdown', primeSpeech, { once:true, capture:true });
+
 function speak(text, remember = false){
   if(remember) currentPrompt = text;
   try{
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    if(chosenVoice) u.voice = chosenVoice;
-    u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
-    speechSynthesis.speak(u);
+    const my = ++speakSeq;
+    // iOS bug: speak() immediately after cancel() is silently dropped —
+    // a short delay makes it reliable.
+    setTimeout(() => {
+      if(my !== speakSeq) return;          // a newer phrase replaced this one
+      try{
+        const u = new SpeechSynthesisUtterance(text);
+        keepUtterance = u;
+        if(chosenVoice) u.voice = chosenVoice;
+        u.lang = chosenVoice ? chosenVoice.lang : 'en-AU';
+        u.rate = 0.92; u.pitch = 1.25; u.volume = 1;
+        speechSynthesis.resume();          // iOS sometimes leaves the engine paused
+        speechSynthesis.speak(u);
+      }catch(e){}
+    }, 120);
   }catch(e){ /* speech unsupported — game still playable visually */ }
 }
 
